@@ -1,0 +1,113 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 250 250 248;
+  --surface: 255 255 255;
+  --surface-2: 243 242 239;
+  --surface-3: 236 234 229;
+  --border: 228 226 220;
+  --border-strong: 210 207 199;
+  --ink: 27 26 24;
+  --ink-muted: 110 107 100;
+  --ink-faint: 154 150 141;
+  --accent: 87 80 241;
+  --accent-ink: 255 255 255;
+  --accent-soft: 238 237 253;
+  --success: 42 138 81;
+  --success-soft: 226 244 233;
+  --warning: 178 105 21;
+  --warning-soft: 250 235 216;
+  --danger: 199 58 58;
+  --danger-soft: 251 228 228;
+
+  /* System font stacks: crisp on every platform with zero network fetch or
+     layout shift. Swap for next/font (e.g. Inter / IBM Plex Mono) if you'd
+     rather ship a bundled webfont. */
+  --font-sans: -apple-system, "Segoe UI Variable", "Segoe UI", "Helvetica Neue", Arial,
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", "Consolas", ui-monospace, "SFMono-Regular", monospace;
+}
+
+.dark {
+  --bg: 17 17 20;
+  --surface: 25 25 29;
+  --surface-2: 32 32 37;
+  --surface-3: 40 40 46;
+  --border: 42 42 49;
+  --border-strong: 58 58 67;
+  --ink: 237 237 239;
+  --ink-muted: 150 150 159;
+  --ink-faint: 101 101 110;
+  --accent: 133 130 248;
+  --accent-ink: 17 17 20;
+  --accent-soft: 40 39 66;
+  --success: 79 191 130;
+  --success-soft: 21 45 32;
+  --warning: 224 156 68;
+  --warning-soft: 52 40 21;
+  --danger: 233 113 113;
+  --danger-soft: 56 28 28;
+}
+
+* {
+  border-color: rgb(var(--border));
+}
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  background-color: rgb(var(--bg));
+  color: rgb(var(--ink));
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Slim, unobtrusive scrollbars used across the board */
+.scroll-thin::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--border-strong));
+  border-radius: 999px;
+}
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--ink-faint));
+}
+
+/* Visible keyboard focus, kept subtle */
+:focus-visible {
+  outline: 2px solid rgb(var(--accent));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Drop-zone treatment while dragging a card over a column */
+.dnd-column-over {
+  background-color: rgb(var(--accent-soft));
+  outline: 1.5px dashed rgb(var(--accent) / 0.5);
+  outline-offset: -6px;
+}
