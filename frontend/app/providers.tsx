@@ -6,7 +6,7 @@ import { BoardStoreProvider } from "@/lib/store";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
       <AuthProvider>
         <BoardStoreProvider>{children}</BoardStoreProvider>
       </AuthProvider>

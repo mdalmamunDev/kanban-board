@@ -3,7 +3,7 @@ import { z } from "zod";
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color must be a hex value");
 
 export const idParamSchema = z.object({ id: z.string().min(1) });
-export const boardIdParamSchema = z.object({ boardId: z.string().min(1) });
+export const boardIdParamSchema = z.object({ id: z.string().min(1) });
 export const columnIdParamSchema = z.object({ columnId: z.string().min(1) });
 export const boardMemberParamsSchema = z.object({
   id: z.string().min(1),

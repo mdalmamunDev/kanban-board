@@ -25,14 +25,21 @@ export function InviteDialog({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"editor" | "viewer">("editor");
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   if (!open) return null;
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
-    inviteMember(board.id, email.trim(), role);
-    setFeedback(`If ${email.trim()} has an account, they now have access.`);
+    setFeedback(null);
+    setError(null);
+    const result = await inviteMember(board.id, email.trim(), role);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setFeedback(`${email.trim()} now has access to this board.`);
     setEmail("");
   };
 
@@ -79,6 +86,7 @@ export function InviteDialog({
           </button>
         </form>
         {feedback && <p className="mt-2 text-[12px] text-ink-faint">{feedback}</p>}
+        {error && <p className="mt-2 text-[12px] text-danger">{error}</p>}
 
         <div className="mt-5 border-t border-border pt-4">
           <p className="mb-2.5 text-[12px] font-medium uppercase tracking-wide text-ink-faint">

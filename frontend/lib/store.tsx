@@ -45,13 +45,13 @@ interface BoardStoreValue {
   updateTask: (taskId: string, patch: Partial<Task>) => void;
   deleteTask: (taskId: string) => void;
 
-  addColumn: (boardId: string, title: string) => void;
+  addColumn: (boardId: string, title: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   renameColumn: (columnId: string, title: string) => void;
   deleteColumn: (columnId: string) => void;
   reorderColumns: (boardId: string, orderedColumnIds: string[]) => void;
 
   createBoard: (name: string, description: string, color: string) => Promise<Board | undefined>;
-  inviteMember: (boardId: string, email: string, role: "editor" | "viewer") => void;
+  inviteMember: (boardId: string, email: string, role: "editor" | "viewer") => Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
 const BoardStoreContext = createContext<BoardStoreValue | null>(null);
@@ -233,8 +233,13 @@ export function BoardStoreProvider({ children }: { children: React.ReactNode }) 
 
   const addColumn = useCallback(
     async (boardId: string, title: string) => {
-      await api.createColumn(boardId, title);
-      await refreshBoard(boardId);
+      try {
+        await api.createColumn(boardId, title);
+        await refreshBoard(boardId);
+        return { ok: true } as const;
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : "Unable to add column." } as const;
+      }
     },
     [refreshBoard]
   );
@@ -280,8 +285,14 @@ export function BoardStoreProvider({ children }: { children: React.ReactNode }) 
   );
 
   const inviteMember = useCallback(
-    (boardId: string, email: string, role: "editor" | "viewer") => {
-      void api.inviteMember(boardId, email, role).then(() => refreshBoard(boardId)).catch(() => undefined);
+    async (boardId: string, email: string, role: "editor" | "viewer") => {
+      try {
+        await api.inviteMember(boardId, email, role);
+        await refreshBoard(boardId);
+        return { ok: true } as const;
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : "Unable to add member." } as const;
+      }
     },
     [refreshBoard]
   );
