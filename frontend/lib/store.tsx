@@ -4,40 +4,21 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
-import {
-  myBoards as initialMyBoards,
-  sharedBoards as initialSharedBoards,
-  columns as initialColumns,
-  labels as initialLabels,
-  tasks as initialTasks,
-  users as initialUsers,
-} from "./mock-data";
+import * as api from "./api";
 import { useAuth } from "./auth";
 import { Board, Column, Label, Priority, Task, User } from "./types";
 
 /**
  * ---------------------------------------------------------------------------
- * DATA LAYER NOTES (read this when wiring the real backend)
+ * DATA LAYER
  * ---------------------------------------------------------------------------
- * Every mutator below (moveTask, createTask, etc.) currently updates local
- * React state directly. Each one is written as a single function with a
- * narrow signature so it maps cleanly onto one API call:
- *
- *   moveTask(taskId, toColumnId, toIndex)  ->  PATCH /tasks/:id/move
- *   createTask(columnId, title)            ->  POST  /columns/:id/tasks
- *   updateTask(taskId, patch)              ->  PATCH /tasks/:id
- *   deleteTask(taskId)                     ->  DELETE /tasks/:id
- *   addColumn(boardId, title)              ->  POST  /boards/:id/columns
- *   renameColumn / deleteColumn            ->  PATCH / DELETE /columns/:id
- *   reorderColumns(boardId, orderedIds)    ->  PATCH /boards/:id/columns/reorder
- *   inviteMember(boardId, email, role)     ->  POST  /boards/:id/members
- *
- * Swap the body of each function for a fetch/mutation call (optimistic
- * update + rollback on failure is the recommended pattern given the optimistic
- * drag-and-drop UX already built into the board).
+ * The server owns persistence and ordering. The local state is hydrated from
+ * full board responses and mutations use optimistic updates where the UI
+ * already expects immediate drag-and-drop feedback.
  * ---------------------------------------------------------------------------
  */
 
@@ -53,13 +34,14 @@ interface BoardStoreValue {
   labels: Label[];
   users: User[];
   currentUserId: string;
+  boardsLoading: boolean;
 
   getBoardColumns: (boardId: string) => Column[];
   getColumnTasks: (columnId: string) => Task[];
   getUser: (userId: string) => User | undefined;
 
   moveTask: (taskId: string, toColumnId: string, toIndex: number) => void;
-  createTask: (columnId: string, title: string) => Task;
+  createTask: (columnId: string, title: string) => Promise<Task | undefined>;
   updateTask: (taskId: string, patch: Partial<Task>) => void;
   deleteTask: (taskId: string) => void;
 
@@ -68,32 +50,71 @@ interface BoardStoreValue {
   deleteColumn: (columnId: string) => void;
   reorderColumns: (boardId: string, orderedColumnIds: string[]) => void;
 
-  createBoard: (name: string, description: string, color: string) => Board;
+  createBoard: (name: string, description: string, color: string) => Promise<Board | undefined>;
   inviteMember: (boardId: string, email: string, role: "editor" | "viewer") => void;
 }
 
 const BoardStoreContext = createContext<BoardStoreValue | null>(null);
 
-let idCounter = 100;
-const nextId = (prefix: string) => `${prefix}${idCounter++}`;
-
 export function BoardStoreProvider({ children }: { children: React.ReactNode }) {
-  const { user: currentUser, registeredUsers } = useAuth();
+  const { user: currentUser, status } = useAuth();
   const currentUserId = currentUser?.id ?? "";
 
-  const [myBoards, setMyBoards] = useState<Board[]>(initialMyBoards);
-  const [sharedBoards, setSharedBoards] = useState<Board[]>(initialSharedBoards);
-  const [columns, setColumns] = useState<Column[]>(initialColumns);
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [labels] = useState<Label[]>(initialLabels);
-  const [baseUsers] = useState<User[]>(initialUsers);
-
-  const users = useMemo(
-    () => [...baseUsers, ...registeredUsers],
-    [baseUsers, registeredUsers]
-  );
+  const [myBoards, setMyBoards] = useState<Board[]>([]);
+  const [sharedBoards, setSharedBoards] = useState<Board[]>([]);
+  const [columns, setColumns] = useState<Column[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [labels, setLabels] = useState<Label[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [boardsLoading, setBoardsLoading] = useState(false);
 
   const boards = useMemo(() => [...myBoards, ...sharedBoards], [myBoards, sharedBoards]);
+
+  const applyBoardPayload = useCallback((payload: ReturnType<typeof api.mapBoardPayload>) => {
+    const { board, columns: nextColumns, tasks: nextTasks, labels: nextLabels, users: nextUsers } = payload;
+    setMyBoards((prev) => prev.some((item) => item.id === board.id) ? prev.map((item) => item.id === board.id ? board : item) : prev);
+    setSharedBoards((prev) => prev.some((item) => item.id === board.id) ? prev.map((item) => item.id === board.id ? board : item) : prev);
+    setColumns((prev) => [...prev.filter((item) => !nextColumns.some((next) => next.id === item.id)), ...nextColumns]);
+    setTasks((prev) => [...prev.filter((item) => !nextTasks.some((next) => next.id === item.id)), ...nextTasks]);
+    setLabels((prev) => [...prev.filter((item) => !nextLabels.some((next) => next.id === item.id)), ...nextLabels]);
+    setUsers((prev) => {
+      const merged = new Map(prev.map((item) => [item.id, item]));
+      nextUsers.forEach((item) => merged.set(item.id, item));
+      return [...merged.values()];
+    });
+  }, []);
+
+  const refreshBoard = useCallback(async (boardId: string) => {
+    const response = await api.getBoard(boardId);
+    applyBoardPayload(api.mapBoardPayload(response.board));
+  }, [applyBoardPayload]);
+
+  useEffect(() => {
+    if (status !== "ready" || !currentUser) {
+      setBoardsLoading(false);
+      return;
+    }
+    setBoardsLoading(true);
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const lists = await api.listBoards();
+        if (cancelled) return;
+        setMyBoards(lists.mine.map((board) => ({ ...board, description: board.description ?? undefined, members: [], columnIds: [] })));
+        setSharedBoards(lists.shared.map((board) => ({ ...board, description: board.description ?? undefined, members: [], columnIds: [] })));
+        await Promise.all([...lists.mine, ...lists.shared].map(async (summary) => {
+          const response = await api.getBoard(summary.id);
+          if (!cancelled) applyBoardPayload(api.mapBoardPayload(response.board));
+        }));
+      } catch (error) {
+        console.error("Unable to load boards", error);
+      } finally {
+        if (!cancelled) setBoardsLoading(false);
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [applyBoardPayload, currentUser, status]);
 
   // Patch a board in whichever list it lives in (my or shared).
   const updateBoard = useCallback(
@@ -165,33 +186,34 @@ export function BoardStoreProvider({ children }: { children: React.ReactNode }) 
 
         return [...untouched, ...reindexedSource, ...reindexedDest];
       });
+      void api.moveTask(taskId, toColumnId, toIndex).catch(() => undefined);
     },
     []
   );
 
-  const createTask = useCallback(
-    (columnId: string, title: string) => {
-      const columnTasks = tasks.filter((t) => t.columnId === columnId);
-      const created: Task = {
-        id: nextId("t"),
-        key: `NEW-${idCounter}`,
-        title,
-        columnId,
-        order: columnTasks.length,
-        priority: "medium" as Priority,
-        labelIds: [],
-        assigneeIds: [],
-      };
-      setTasks((prev) => [...prev, created]);
-      return created;
-    },
-    [tasks]
-  );
+  const createTask = useCallback(async (columnId: string, title: string) => {
+    try {
+      const response = await api.createTask(columnId, title);
+      const task = { ...response.task, columnId, description: response.task.description ?? undefined, dueDate: response.task.dueDate ?? undefined };
+      setTasks((prev) => [...prev, task]);
+      return task;
+    } catch (error) {
+      console.error("Unable to create task", error);
+      return undefined;
+    }
+  }, []);
 
   const updateTask = useCallback((taskId: string, patch: Partial<Task>) => {
     setTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, ...patch } : t))
     );
+    if (patch.columnId !== undefined) {
+      void api.moveTask(taskId, patch.columnId, 0).catch(() => undefined);
+      return;
+    }
+    void api.updateTask(taskId, patch).then(({ task }) => {
+      setTasks((prev) => prev.map((item) => item.id === taskId ? { ...item, ...task, description: task.description ?? undefined, dueDate: task.dueDate ?? undefined } : item));
+    }).catch(() => undefined);
   }, []);
 
   const deleteTask = useCallback((taskId: string) => {
@@ -206,34 +228,24 @@ export function BoardStoreProvider({ children }: { children: React.ReactNode }) 
       const others = remaining.filter((t) => t.columnId !== task.columnId);
       return [...others, ...reindexed];
     });
+    void api.deleteTask(taskId).catch(() => undefined);
   }, []);
 
   const addColumn = useCallback(
-    (boardId: string, title: string) => {
-      const newColumn: Column = {
-        id: nextId("c"),
-        title,
-        order: 999,
-        color: "#8F8F98",
-      };
-      const board = boards.find((b) => b.id === boardId);
-      setColumns((prev) => [
-        ...prev,
-        { ...newColumn, order: board?.columnIds.length ?? 0 },
-      ]);
-      updateBoard(boardId, (b) => ({
-        ...b,
-        columnIds: [...b.columnIds, newColumn.id],
-      }));
+    async (boardId: string, title: string) => {
+      await api.createColumn(boardId, title);
+      await refreshBoard(boardId);
     },
-    [boards, updateBoard]
+    [refreshBoard]
   );
 
   const renameColumn = useCallback((columnId: string, title: string) => {
     setColumns((prev) => prev.map((c) => (c.id === columnId ? { ...c, title } : c)));
+    void api.updateColumn(columnId, title).catch(() => undefined);
   }, []);
 
   const deleteColumn = useCallback((columnId: string) => {
+    const board = boards.find((item) => item.columnIds.includes(columnId));
     setColumns((prev) => prev.filter((c) => c.id !== columnId));
     setMyBoards((prev) =>
       prev.map((b) => ({ ...b, columnIds: b.columnIds.filter((id) => id !== columnId) }))
@@ -242,7 +254,8 @@ export function BoardStoreProvider({ children }: { children: React.ReactNode }) 
       prev.map((b) => ({ ...b, columnIds: b.columnIds.filter((id) => id !== columnId) }))
     );
     setTasks((prev) => prev.filter((t) => t.columnId !== columnId));
-  }, []);
+    void api.deleteColumn(columnId).catch(() => board && refreshBoard(board.id));
+  }, [boards, refreshBoard]);
 
   const reorderColumns = useCallback((boardId: string, orderedColumnIds: string[]) => {
     setColumns((prev) =>
@@ -252,40 +265,25 @@ export function BoardStoreProvider({ children }: { children: React.ReactNode }) 
       })
     );
     updateBoard(boardId, (b) => ({ ...b, columnIds: orderedColumnIds }));
-  }, [updateBoard]);
+    void api.reorderColumns(boardId, orderedColumnIds).catch(() => refreshBoard(boardId));
+  }, [refreshBoard]);
 
   const createBoard = useCallback(
-    (name: string, description: string, color: string) => {
-      const backlog: Column = { id: nextId("c"), title: "Backlog", order: 0, color: "#8F8F98" };
-      const doing: Column = { id: nextId("c"), title: "In Progress", order: 1, color: "#5750F1" };
-      const done: Column = { id: nextId("c"), title: "Done", order: 2, color: "#2F9E5B" };
-      const board: Board = {
-        id: nextId("b"),
-        name,
-        description,
-        color,
-        ownerId: currentUserId,
-        members: [{ userId: currentUserId, role: "owner" }],
-        columnIds: [backlog.id, doing.id, done.id],
-      };
-      setColumns((prev) => [...prev, backlog, doing, done]);
-      setMyBoards((prev) => [...prev, board]);
-      return board;
+    async (name: string, description: string, color: string) => {
+      const response = await api.createBoard(name, description, color);
+      const payload = api.mapBoardPayload(response.board);
+      applyBoardPayload(payload);
+      setMyBoards((prev) => [...prev.filter((item) => item.id !== payload.board.id), payload.board]);
+      return payload.board;
     },
-    [currentUserId]
+    [applyBoardPayload]
   );
 
   const inviteMember = useCallback(
     (boardId: string, email: string, role: "editor" | "viewer") => {
-      const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-      if (!user) return;
-      updateBoard(boardId, (b) =>
-        b.members.some((m) => m.userId === user.id)
-          ? b
-          : { ...b, members: [...b.members, { userId: user.id, role }] }
-      );
+      void api.inviteMember(boardId, email, role).then(() => refreshBoard(boardId)).catch(() => undefined);
     },
-    [users, updateBoard]
+    [refreshBoard]
   );
 
   const value = useMemo<BoardStoreValue>(
@@ -298,6 +296,7 @@ export function BoardStoreProvider({ children }: { children: React.ReactNode }) 
       labels,
       users,
       currentUserId,
+      boardsLoading,
       getBoardColumns,
       getColumnTasks,
       getUser,
@@ -320,6 +319,7 @@ export function BoardStoreProvider({ children }: { children: React.ReactNode }) 
       tasks,
       labels,
       users,
+      boardsLoading,
       getBoardColumns,
       getColumnTasks,
       getUser,

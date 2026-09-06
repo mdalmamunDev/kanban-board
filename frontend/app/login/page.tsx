@@ -21,11 +21,10 @@ export default function LoginPage() {
     }
   }, [status, user, router]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: replace with POST /auth/login, store the returned token, then redirect.
     setError(null);
-    const result = login(email, password);
+    const result = await login(email, password);
     if (result.ok) {
       router.push("/");
     } else {

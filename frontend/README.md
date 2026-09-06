@@ -1,8 +1,31 @@
+## Backend API
+
+The frontend uses the real backend API by default at `http://localhost:4000/api`.
+Create `frontend/.env.local` only when the API runs at another URL:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:4000/api
+```
+
+Start the backend first, then run the frontend:
+
+```bash
+cd ../backend
+npm run docker:up
+npm run dev
+
+cd ../frontend
+npm install
+npm run dev
+```
+
+Authentication stores the backend JWT in browser local storage. Boards, columns,
+tasks, invites, and drag-and-drop updates are persisted through the API.
 # Kanban Board — Frontend
 
 A Next.js (App Router) + TypeScript kanban board UI: boards, columns, drag-and-drop
-tasks, board sharing, task details, and a light/dark theme. Built with mock data so
-you can explore it immediately; wire up your API next.
+tasks, board sharing, task details, and a light/dark theme. The frontend is integrated
+with the Express backend in `../backend`.
 
 ## Run it
 
@@ -11,41 +34,32 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:3000. It defaults to the "Billing & Payments" board —
-switch boards from the left sidebar.
+Then open http://localhost:3000. The backend must be running at
+`http://localhost:4000/api` or be configured with `NEXT_PUBLIC_API_URL`.
 
 ## Where things live
 
 - `lib/types.ts` — Board / Column / Task / User / Label shapes. Match your DB schema
   to these (or edit these to match your schema).
-- `lib/mock-data.ts` — sample boards/columns/tasks/users/labels. Replace with data
-  fetched from your API. Boards are split into `myBoards` (boards you own) and
-  `sharedBoards` (boards shared with you) — same `Board` type for both; in the
-  future fetch them from `GET /boards/mine` and `GET /boards/shared`.
-- `lib/auth.tsx` — mock client-side auth (`login`, `register`, `logout`) persisted
-  to `localStorage` (session + registered users). When you wire the backend, swap
-  the bodies for `POST /auth/login`, `POST /auth/register`, `POST /auth/logout`.
-- `lib/store.tsx` — the data layer. Every mutation (`moveTask`, `createTask`,
-  `updateTask`, `deleteTask`, `addColumn`, `inviteMember`, etc.) is one function with
-  a comment showing the REST endpoint it should call
-  (e.g. `moveTask(taskId, toColumnId, toIndex)` → `PATCH /tasks/:id/move`).
-  Swap the body of each for a real `fetch`/mutation call — the components never talk
-  to state directly, they only call these functions, so this is the single place to
-  change.
+- `lib/api.ts` — typed API client, JWT storage, response mapping, and REST calls.
+- `lib/auth.tsx` — backend authentication via `POST /auth/login`,
+  `POST /auth/register`, `GET /auth/me`, and `POST /auth/logout`.
+- `lib/store.tsx` — backend-hydrated board data layer. Mutations call the API while
+  preserving optimistic drag-and-drop behavior.
+- `lib/mock-data.ts` — retained as reference/demo data; it is no longer used by the
+  live board or authentication providers.
 - `components/board/` — board, column, task card, add-column/add-task, invite dialog.
 - `components/task/task-detail-drawer.tsx` — the task side panel.
 - `components/layout/` — sidebar and top bar.
-- `app/login`, `app/register` — static auth screens (form UI only — no request is
-  sent yet; each has a `TODO` comment marking where to call your auth endpoint).
+- `app/login`, `app/register` — authentication forms connected to the backend.
 
 ## Drag and drop
 
 Built with `@dnd-kit`. The important logic is in `components/board/board-view.tsx`:
 `handleDragOver` figures out the destination column + index from whatever the
-pointer is over (another task, or empty column space) and calls `moveTask` — which
-recomputes sequential `order` values for the affected column(s) so ordering stays
-consistent. That's the same shape your move endpoint should follow server-side
-(ideally inside a transaction).
+pointer is over (another task, or empty column space) and calls `moveTask`. The
+frontend updates immediately and persists the move with `PATCH /api/tasks/:id/move`;
+the backend performs the authoritative transactional reordering.
 
 ## Theme
 

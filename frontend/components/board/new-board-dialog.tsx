@@ -23,10 +23,11 @@ export function NewBoardDialog({
 
   if (!open) return null;
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    const board = createBoard(name.trim(), description.trim(), color);
+    const board = await createBoard(name.trim(), description.trim(), color);
+    if (!board) return;
     setName("");
     setDescription("");
     setColor(COLORS[0]);

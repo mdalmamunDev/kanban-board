@@ -14,16 +14,16 @@ export function AddTaskInline({ columnId, onCreated }: { columnId: string; onCre
     if (open) ref.current?.focus();
   }, [open]);
 
-  const submit = () => {
+  const submit = async () => {
     const title = value.trim();
     if (!title) {
       setOpen(false);
       setValue("");
       return;
     }
-    const task = createTask(columnId, title);
+    const task = await createTask(columnId, title);
     setValue("");
-    onCreated?.(task.id);
+    if (task) onCreated?.(task.id);
     ref.current?.focus();
   };
 

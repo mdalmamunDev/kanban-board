@@ -10,7 +10,7 @@ import { Avatar, AvatarStack } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { InviteDialog } from "@/components/board/invite-dialog";
 
-export function TopBar({ board, search, onSearchChange }: { board: Board; search: string; onSearchChange: (v: string) => void }) {
+export function TopBar({ board, search, onSearchChange }: { board?: Board; search: string; onSearchChange: (v: string) => void }) {
   const router = useRouter();
   const { getUser, currentUserId } = useBoardStore();
   const { user, logout } = useAuth();
@@ -42,24 +42,26 @@ export function TopBar({ board, search, onSearchChange }: { board: Board; search
     router.push("/login");
   };
 
-  const memberUsers = board.members
-    .map((m) => getUser(m.userId))
-    .filter((u): u is NonNullable<typeof u> => Boolean(u));
+  const memberUsers = board
+    ? board.members
+        .map((m) => getUser(m.userId))
+        .filter((u): u is NonNullable<typeof u> => Boolean(u))
+    : [];
 
-  const myRole = board.members.find((m) => m.userId === currentUserId)?.role ?? "viewer";
+  const myRole = board?.members.find((m) => m.userId === currentUserId)?.role ?? "viewer";
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-surface px-5">
       <div className="flex min-w-0 flex-col justify-center">
         <div className="flex items-center gap-1.5">
-          <h1 className="truncate text-[14px] font-semibold leading-tight">{board.name}</h1>
-          {myRole === "viewer" && (
+          <h1 className="truncate text-[14px] font-semibold leading-tight">{board?.name ?? "Your workspace"}</h1>
+          {board && myRole === "viewer" && (
             <span title="You have view-only access" className="text-ink-faint">
               <Lock size={11} />
             </span>
           )}
         </div>
-        {board.description && (
+        {board?.description && (
           <p className="truncate text-[12px] leading-tight text-ink-faint">{board.description}</p>
         )}
       </div>
@@ -77,6 +79,7 @@ export function TopBar({ board, search, onSearchChange }: { board: Board; search
       <div className="ml-auto flex items-center gap-3">
         <button
           onClick={() => setInviteOpen(true)}
+          disabled={!board}
           className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[12.5px] font-medium text-ink-muted transition-colors hover:border-border-strong hover:text-ink"
         >
           <UserPlus size={13} />
@@ -122,7 +125,7 @@ export function TopBar({ board, search, onSearchChange }: { board: Board; search
         )}
       </div>
 
-      <InviteDialog open={inviteOpen} onClose={() => setInviteOpen(false)} board={board} />
+      {board && <InviteDialog open={inviteOpen} onClose={() => setInviteOpen(false)} board={board} />}
     </header>
   );
 }

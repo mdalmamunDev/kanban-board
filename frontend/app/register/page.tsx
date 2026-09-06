@@ -22,11 +22,10 @@ export default function RegisterPage() {
     }
   }, [status, user, router]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: replace with POST /auth/register, store the returned token, then redirect.
     setError(null);
-    const result = register(name, email, password);
+    const result = await register(name, email, password);
     if (result.ok) {
       router.push("/");
     } else {
