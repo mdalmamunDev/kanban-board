@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Trello } from "lucide-react";
+import { Loader2, Trello } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/lib/auth";
 
@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Already signed in? Go straight to the boards.
   useEffect(() => {
@@ -24,11 +25,16 @@ export default function LoginPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const result = await login(email, password);
-    if (result.ok) {
-      router.push("/");
-    } else {
-      setError(result.error);
+    setIsSubmitting(true);
+    try {
+      const result = await login(email, password);
+      if (result.ok) {
+        router.push("/");
+      } else {
+        setError(result.error);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -87,9 +93,11 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="mt-1.5 rounded-md bg-accent py-2 text-[13.5px] font-medium text-accent-ink transition-opacity hover:opacity-90"
+            disabled={isSubmitting}
+            className="mt-1.5 flex items-center justify-center gap-2 rounded-md bg-accent py-2 text-[13.5px] font-medium text-accent-ink transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            Sign in
+            {isSubmitting && <Loader2 size={15} className="animate-spin" aria-hidden="true" />}
+            {isSubmitting ? "Signing in..." : "Sign in"}
           </button>
         </form>
 
