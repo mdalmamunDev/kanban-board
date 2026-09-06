@@ -1,0 +1,81 @@
+# ======================================================================
+# Kanban backend infra
+#   PostgreSQL + Redis + API (all in Docker).
+#   Host ports are "random" (non-default) so they don't clash with
+#   services already running on 5432/6379. Override via .env:
+#     POSTGRES_PORT  (default 5433)
+#     REDIS_PORT     (default 6380)
+#     API_PORT       (default 4000)
+# ======================================================================
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: kanban-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kanban}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kanban}
+      POSTGRES_DB: ${POSTGRES_DB:-kanban}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kanban} -d ${POSTGRES_DB:-kanban}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: kanban-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kanban-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-kanban}:${POSTGRES_PASSWORD:-kanban}@db:5432/${POSTGRES_DB:-kanban}?schema=public"
+      REDIS_URL: "redis://redis:6379"
+      JWT_SECRET: "${JWT_SECRET:-dev-only-secret-8f2b1c7e9a4d}"
+      JWT_EXPIRES_IN: "${JWT_EXPIRES_IN:-7d}"
+      CORS_ORIGIN: "${CORS_ORIGIN:-http://localhost:3000}"
+    ports:
+      - "${API_PORT:-4000}:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+
+volumes:
+  pgdata:
+  redisdata:

@@ -1,0 +1,176 @@
+// Prisma schema for the Kanban backend
+// PostgreSQL + indexes on every hot query path.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+enum Priority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum Role {
+  owner
+  editor
+  viewer
+}
+
+// ---------------------------------------------------------------------------
+// User
+// ---------------------------------------------------------------------------
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique // unique index for login/lookup
+  name         String
+  initials     String
+  color        String   @default("#5750F1")
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownedBoards  Board[]          @relation("BoardOwner")
+  boardMembers BoardMember[]
+  assignedTasks TaskAssignee[]
+}
+
+// ---------------------------------------------------------------------------
+// Board
+// ---------------------------------------------------------------------------
+model Board {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String   @default("#5750F1")
+  keyPrefix   String // e.g. "BIL" -> task keys like "BIL-142"
+  keySequence Int      @default(0) // atomic next-key counter
+  ownerId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner   User           @relation("BoardOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members BoardMember[]
+  columns Column[]
+  labels  Label[]
+  tasks   Task[]
+
+  @@index([ownerId]) // drives GET /boards/mine
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// BoardMember - who has access to a board and with what role.
+// ---------------------------------------------------------------------------
+model BoardMember {
+  boardId String
+  userId  String
+  role    Role     @default(editor)
+  createdAt DateTime @default(now())
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([boardId, userId])
+  @@index([userId]) // drives GET /boards/shared (member lookup by user)
+}
+
+// ---------------------------------------------------------------------------
+// Column
+// ---------------------------------------------------------------------------
+model Column {
+  id       String  @id @default(cuid())
+  boardId  String
+  title    String
+  order    Int
+  color    String  @default("#8F8F98")
+  wipLimit Int?
+
+  board Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  tasks Task[]
+
+  @@index([boardId, order]) // board load + column ordering
+}
+
+// ---------------------------------------------------------------------------
+// Task
+// ---------------------------------------------------------------------------
+model Task {
+  id            String   @id @default(cuid())
+  key           String // e.g. "BIL-142"
+  boardId       String
+  columnId      String
+  title         String
+  description   String?
+  order         Int
+  priority      Priority @default(medium)
+  dueDate       DateTime?
+  subtasksDone  Int      @default(0)
+  subtasksTotal Int      @default(0)
+  commentCount  Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  board     Board          @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  column    Column         @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  labels    TaskLabel[]
+  assignees TaskAssignee[]
+
+  @@unique([boardId, key]) // key uniquee per board
+  @@index([columnId, order]) // column render + move/reorder
+  @@index([boardId])
+}
+
+// ---------------------------------------------------------------------------
+// Label - belongs to a board.
+// ---------------------------------------------------------------------------
+model Label {
+  id      String @id @default(cuid())
+  boardId String
+  name    String
+  color   String
+
+  board Board        @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  tasks TaskLabel[]
+
+  @@index([boardId])
+  @@unique([boardId, name])
+}
+
+// ---------------------------------------------------------------------------
+// Task <-> Label join
+// ---------------------------------------------------------------------------
+model TaskLabel {
+  taskId  String
+  labelId String
+
+  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@index([labelId])
+}
+
+// ---------------------------------------------------------------------------
+// Task <-> Assignee join
+// ---------------------------------------------------------------------------
+model TaskAssignee {
+  taskId String
+  userId String
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@index([userId]) // "tasks assigned to me" queries
+}
