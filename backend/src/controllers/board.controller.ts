@@ -40,7 +40,7 @@ export const listMine = asyncHandler(async (req: Request, res: Response) => {
 
   const boards = await prisma.board.findMany({
     where: { ownerId: userId },
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: "asc" },
     include: { _count: { select: { members: true } } },
   });
   const dtos = boards.map(toBoardSummaryDTO);
@@ -64,7 +64,7 @@ export const listShared = asyncHandler(async (req: Request, res: Response) => {
 
   const boards = await prisma.board.findMany({
     where: { members: { some: { userId } }, ownerId: { not: userId } },
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: "asc" },
     include: { _count: { select: { members: true } } },
   });
   const dtos = boards.map(toBoardSummaryDTO);
