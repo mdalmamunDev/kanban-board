@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import clsx from "clsx";
-import { ChevronsLeft, ChevronsRight, Plus, Trello } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, Plus, Trello, Users } from "lucide-react";
 import { useBoardStore } from "@/lib/store";
 import { NewBoardDialog } from "@/components/board/new-board-dialog";
 
@@ -13,7 +13,7 @@ export function Sidebar({
   activeBoardId: string;
   onSelectBoard: (id: string) => void;
 }) {
-  const { boards } = useBoardStore();
+  const { myBoards, sharedBoards } = useBoardStore();
   const [collapsed, setCollapsed] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -48,7 +48,7 @@ export function Sidebar({
         )}
 
         <nav className="flex flex-col gap-0.5">
-          {boards.map((board) => {
+          {myBoards.map((board) => {
             const active = board.id === activeBoardId;
             return (
               <button
@@ -72,6 +72,44 @@ export function Sidebar({
             );
           })}
         </nav>
+
+        {sharedBoards.length > 0 && (
+          <>
+            {!collapsed && (
+              <div className="flex items-center gap-1.5 px-2 pb-1.5 pt-3">
+                <Users size={12} strokeWidth={2.2} className="text-ink-faint" />
+                <span className="text-[11px] font-medium uppercase tracking-wide text-ink-faint">
+                  Shared with me
+                </span>
+              </div>
+            )}
+            <nav className="flex flex-col gap-0.5">
+              {sharedBoards.map((board) => {
+                const active = board.id === activeBoardId;
+                return (
+                  <button
+                    key={board.id}
+                    onClick={() => onSelectBoard(board.id)}
+                    title={board.name}
+                    className={clsx(
+                      "group flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors",
+                      collapsed && "justify-center px-0 py-2",
+                      active
+                        ? "bg-accent-soft text-accent"
+                        : "text-ink-muted hover:bg-surface-2 hover:text-ink"
+                    )}
+                  >
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: board.color }}
+                    />
+                    {!collapsed && <span className="truncate font-medium">{board.name}</span>}
+                  </button>
+                );
+              })}
+            </nav>
+          </>
+        )}
 
         {collapsed && (
           <button

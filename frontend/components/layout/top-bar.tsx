@@ -1,16 +1,46 @@
 "use client";
 
-import { useState } from "react";
-import { Search, UserPlus, Lock } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Lock, LogOut, Search, UserPlus } from "lucide-react";
 import { Board } from "@/lib/types";
 import { useBoardStore } from "@/lib/store";
-import { AvatarStack } from "@/components/ui/avatar";
+import { useAuth } from "@/lib/auth";
+import { Avatar, AvatarStack } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { InviteDialog } from "@/components/board/invite-dialog";
 
 export function TopBar({ board, search, onSearchChange }: { board: Board; search: string; onSearchChange: (v: string) => void }) {
+  const router = useRouter();
   const { getUser, currentUserId } = useBoardStore();
+  const { user, logout } = useAuth();
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!profileOpen) return;
+    function onClick(e: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setProfileOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [profileOpen]);
+
+  const handleLogout = () => {
+    setProfileOpen(false);
+    logout();
+    router.push("/login");
+  };
 
   const memberUsers = board.members
     .map((m) => getUser(m.userId))
@@ -58,6 +88,38 @@ export function TopBar({ board, search, onSearchChange }: { board: Board; search
         <div className="h-5 w-px bg-border" />
 
         <ThemeToggle />
+
+        {user && (
+          <div className="relative" ref={profileRef}>
+            <button
+              onClick={() => setProfileOpen((o) => !o)}
+              aria-label="Open profile menu"
+              className="flex h-8 w-8 items-center justify-center rounded-full transition-colors"
+            >
+              <Avatar user={user} size="sm" />
+            </button>
+
+            {profileOpen && (
+              <div className="absolute right-0 top-full mt-2 w-60 rounded-lg border border-border bg-surface p-1.5 shadow-popover animate-pop-in">
+                <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
+                  <Avatar user={user} size="sm" />
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-medium leading-tight">{user.name}</p>
+                    <p className="truncate text-[11.5px] leading-tight text-ink-faint">{user.email}</p>
+                  </div>
+                </div>
+                <div className="my-1 border-t border-border" />
+                <button
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] font-medium text-ink-muted hover:bg-surface-2 hover:text-ink"
+                >
+                  <LogOut size={13} />
+                  Log out
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <InviteDialog open={inviteOpen} onClose={() => setInviteOpen(false)} board={board} />

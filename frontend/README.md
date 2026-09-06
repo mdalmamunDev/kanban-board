@@ -19,7 +19,12 @@ switch boards from the left sidebar.
 - `lib/types.ts` — Board / Column / Task / User / Label shapes. Match your DB schema
   to these (or edit these to match your schema).
 - `lib/mock-data.ts` — sample boards/columns/tasks/users/labels. Replace with data
-  fetched from your API.
+  fetched from your API. Boards are split into `myBoards` (boards you own) and
+  `sharedBoards` (boards shared with you) — same `Board` type for both; in the
+  future fetch them from `GET /boards/mine` and `GET /boards/shared`.
+- `lib/auth.tsx` — mock client-side auth (`login`, `register`, `logout`) persisted
+  to `localStorage` (session + registered users). When you wire the backend, swap
+  the bodies for `POST /auth/login`, `POST /auth/register`, `POST /auth/logout`.
 - `lib/store.tsx` — the data layer. Every mutation (`moveTask`, `createTask`,
   `updateTask`, `deleteTask`, `addColumn`, `inviteMember`, etc.) is one function with
   a comment showing the REST endpoint it should call

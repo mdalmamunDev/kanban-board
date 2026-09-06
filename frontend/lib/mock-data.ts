@@ -1,9 +1,7 @@
 import { Board, Column, Label, Task, User } from "./types";
 
-export const currentUserId = "u1";
-
 export const users: User[] = [
-  { id: "u1", name: "Mamun Rashid", email: "mamun@company.io", color: "#5750F1", initials: "MR" },
+  { id: "u1", name: "Mamun Rashid", email: "user@gmail.com", color: "#5750F1", initials: "MR" },
   { id: "u2", name: "Priya Nair", email: "priya@company.io", color: "#C97B1D", initials: "PN" },
   { id: "u3", name: "Diego Ferreira", email: "diego@company.io", color: "#2F9E5B", initials: "DF" },
   { id: "u4", name: "Amina Yusuf", email: "amina@company.io", color: "#D64545", initials: "AY" },
@@ -19,7 +17,8 @@ export const labels: Label[] = [
   { id: "l6", name: "Infra", color: "#8B5CF6" },
 ];
 
-export const boards: Board[] = [
+// Boards you own -> future GET /boards/mine
+export const myBoards: Board[] = [
   {
     id: "b1",
     name: "Billing & Payments",
@@ -34,6 +33,10 @@ export const boards: Board[] = [
     ],
     columnIds: ["c1", "c2", "c3", "c4"],
   },
+];
+
+// Boards shared with you (you are a member but not the owner) -> future GET /boards/shared
+export const sharedBoards: Board[] = [
   {
     id: "b2",
     name: "Design System",

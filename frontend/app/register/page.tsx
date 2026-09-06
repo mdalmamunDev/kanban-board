@@ -2,20 +2,36 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Trello } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useAuth } from "@/lib/auth";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { user, status, register } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  // Already signed in? Go straight to the boards.
+  useEffect(() => {
+    if (status === "ready" && user) {
+      router.replace("/");
+    }
+  }, [status, user, router]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     // TODO: replace with POST /auth/register, store the returned token, then redirect.
-    router.push("/");
+    setError(null);
+    const result = register(name, email, password);
+    if (result.ok) {
+      router.push("/");
+    } else {
+      setError(result.error);
+    }
   };
 
   return (
@@ -88,6 +104,12 @@ export default function RegisterPage() {
             Create account
           </button>
         </form>
+
+        {error && (
+          <p className="mt-3 rounded-md border border-[#D64545]/30 bg-[#D64545]/10 px-3 py-2 text-[12.5px] font-medium text-[#D64545]">
+            {error}
+          </p>
+        )}
 
         <p className="mt-5 text-center text-[13px] text-ink-faint">
           Already have an account?{" "}

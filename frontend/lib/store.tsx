@@ -8,13 +8,14 @@ import {
   useState,
 } from "react";
 import {
-  boards as initialBoards,
+  myBoards as initialMyBoards,
+  sharedBoards as initialSharedBoards,
   columns as initialColumns,
   labels as initialLabels,
   tasks as initialTasks,
   users as initialUsers,
-  currentUserId,
 } from "./mock-data";
+import { useAuth } from "./auth";
 import { Board, Column, Label, Priority, Task, User } from "./types";
 
 /**
@@ -41,6 +42,11 @@ import { Board, Column, Label, Priority, Task, User } from "./types";
  */
 
 interface BoardStoreValue {
+  // Boards you own -> maps to future GET /boards/mine
+  myBoards: Board[];
+  // Boards shared with you -> maps to future GET /boards/shared
+  sharedBoards: Board[];
+  // Combined convenience list (my + shared) so existing consumers keep working.
   boards: Board[];
   columns: Column[];
   tasks: Task[];
@@ -72,11 +78,31 @@ let idCounter = 100;
 const nextId = (prefix: string) => `${prefix}${idCounter++}`;
 
 export function BoardStoreProvider({ children }: { children: React.ReactNode }) {
-  const [boards, setBoards] = useState<Board[]>(initialBoards);
+  const { user: currentUser, registeredUsers } = useAuth();
+  const currentUserId = currentUser?.id ?? "";
+
+  const [myBoards, setMyBoards] = useState<Board[]>(initialMyBoards);
+  const [sharedBoards, setSharedBoards] = useState<Board[]>(initialSharedBoards);
   const [columns, setColumns] = useState<Column[]>(initialColumns);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [labels] = useState<Label[]>(initialLabels);
-  const [users] = useState<User[]>(initialUsers);
+  const [baseUsers] = useState<User[]>(initialUsers);
+
+  const users = useMemo(
+    () => [...baseUsers, ...registeredUsers],
+    [baseUsers, registeredUsers]
+  );
+
+  const boards = useMemo(() => [...myBoards, ...sharedBoards], [myBoards, sharedBoards]);
+
+  // Patch a board in whichever list it lives in (my or shared).
+  const updateBoard = useCallback(
+    (boardId: string, updater: (board: Board) => Board) => {
+      setMyBoards((prev) => prev.map((b) => (b.id === boardId ? updater(b) : b)));
+      setSharedBoards((prev) => prev.map((b) => (b.id === boardId ? updater(b) : b)));
+    },
+    []
+  );
 
   const getBoardColumns = useCallback(
     (boardId: string) => {
@@ -182,25 +208,26 @@ export function BoardStoreProvider({ children }: { children: React.ReactNode }) 
     });
   }, []);
 
-  const addColumn = useCallback((boardId: string, title: string) => {
-    const newColumn: Column = {
-      id: nextId("c"),
-      title,
-      order: 999,
-      color: "#8F8F98",
-    };
-    setColumns((prev) => {
-      const boardCols = prev.filter((c) =>
-        boards.find((b) => b.id === boardId)?.columnIds.includes(c.id)
-      );
-      return [...prev, { ...newColumn, order: boardCols.length }];
-    });
-    setBoards((prev) =>
-      prev.map((b) =>
-        b.id === boardId ? { ...b, columnIds: [...b.columnIds, newColumn.id] } : b
-      )
-    );
-  }, [boards]);
+  const addColumn = useCallback(
+    (boardId: string, title: string) => {
+      const newColumn: Column = {
+        id: nextId("c"),
+        title,
+        order: 999,
+        color: "#8F8F98",
+      };
+      const board = boards.find((b) => b.id === boardId);
+      setColumns((prev) => [
+        ...prev,
+        { ...newColumn, order: board?.columnIds.length ?? 0 },
+      ]);
+      updateBoard(boardId, (b) => ({
+        ...b,
+        columnIds: [...b.columnIds, newColumn.id],
+      }));
+    },
+    [boards, updateBoard]
+  );
 
   const renameColumn = useCallback((columnId: string, title: string) => {
     setColumns((prev) => prev.map((c) => (c.id === columnId ? { ...c, title } : c)));
@@ -208,7 +235,10 @@ export function BoardStoreProvider({ children }: { children: React.ReactNode }) 
 
   const deleteColumn = useCallback((columnId: string) => {
     setColumns((prev) => prev.filter((c) => c.id !== columnId));
-    setBoards((prev) =>
+    setMyBoards((prev) =>
+      prev.map((b) => ({ ...b, columnIds: b.columnIds.filter((id) => id !== columnId) }))
+    );
+    setSharedBoards((prev) =>
       prev.map((b) => ({ ...b, columnIds: b.columnIds.filter((id) => id !== columnId) }))
     );
     setTasks((prev) => prev.filter((t) => t.columnId !== columnId));
@@ -221,46 +251,47 @@ export function BoardStoreProvider({ children }: { children: React.ReactNode }) 
         return idx === -1 ? c : { ...c, order: idx };
       })
     );
-    setBoards((prev) =>
-      prev.map((b) => (b.id === boardId ? { ...b, columnIds: orderedColumnIds } : b))
-    );
-  }, []);
+    updateBoard(boardId, (b) => ({ ...b, columnIds: orderedColumnIds }));
+  }, [updateBoard]);
 
-  const createBoard = useCallback((name: string, description: string, color: string) => {
-    const backlog: Column = { id: nextId("c"), title: "Backlog", order: 0, color: "#8F8F98" };
-    const doing: Column = { id: nextId("c"), title: "In Progress", order: 1, color: "#5750F1" };
-    const done: Column = { id: nextId("c"), title: "Done", order: 2, color: "#2F9E5B" };
-    const board: Board = {
-      id: nextId("b"),
-      name,
-      description,
-      color,
-      ownerId: currentUserId,
-      members: [{ userId: currentUserId, role: "owner" }],
-      columnIds: [backlog.id, doing.id, done.id],
-    };
-    setColumns((prev) => [...prev, backlog, doing, done]);
-    setBoards((prev) => [...prev, board]);
-    return board;
-  }, []);
+  const createBoard = useCallback(
+    (name: string, description: string, color: string) => {
+      const backlog: Column = { id: nextId("c"), title: "Backlog", order: 0, color: "#8F8F98" };
+      const doing: Column = { id: nextId("c"), title: "In Progress", order: 1, color: "#5750F1" };
+      const done: Column = { id: nextId("c"), title: "Done", order: 2, color: "#2F9E5B" };
+      const board: Board = {
+        id: nextId("b"),
+        name,
+        description,
+        color,
+        ownerId: currentUserId,
+        members: [{ userId: currentUserId, role: "owner" }],
+        columnIds: [backlog.id, doing.id, done.id],
+      };
+      setColumns((prev) => [...prev, backlog, doing, done]);
+      setMyBoards((prev) => [...prev, board]);
+      return board;
+    },
+    [currentUserId]
+  );
 
   const inviteMember = useCallback(
     (boardId: string, email: string, role: "editor" | "viewer") => {
       const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
       if (!user) return;
-      setBoards((prev) =>
-        prev.map((b) =>
-          b.id === boardId && !b.members.some((m) => m.userId === user.id)
-            ? { ...b, members: [...b.members, { userId: user.id, role }] }
-            : b
-        )
+      updateBoard(boardId, (b) =>
+        b.members.some((m) => m.userId === user.id)
+          ? b
+          : { ...b, members: [...b.members, { userId: user.id, role }] }
       );
     },
-    [users]
+    [users, updateBoard]
   );
 
   const value = useMemo<BoardStoreValue>(
     () => ({
+      myBoards,
+      sharedBoards,
       boards,
       columns,
       tasks,
@@ -282,6 +313,8 @@ export function BoardStoreProvider({ children }: { children: React.ReactNode }) 
       inviteMember,
     }),
     [
+      myBoards,
+      sharedBoards,
       boards,
       columns,
       tasks,
