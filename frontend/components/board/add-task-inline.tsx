@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Loader2, Plus, X } from "lucide-react";
 import { useBoardStore } from "@/lib/store";
 
 export function AddTaskInline({ columnId, onCreated }: { columnId: string; onCreated?: (taskId: string) => void }) {
   const { createTask } = useBoardStore();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -15,15 +16,21 @@ export function AddTaskInline({ columnId, onCreated }: { columnId: string; onCre
   }, [open]);
 
   const submit = async () => {
+    if (isSubmitting) return;
     const title = value.trim();
     if (!title) {
       setOpen(false);
       setValue("");
       return;
     }
-    const task = await createTask(columnId, title);
-    setValue("");
-    if (task) onCreated?.(task.id);
+    setIsSubmitting(true);
+    try {
+      const task = await createTask(columnId, title);
+      setValue("");
+      if (task) onCreated?.(task.id);
+    } finally {
+      setIsSubmitting(false);
+    }
     ref.current?.focus();
   };
 
@@ -44,11 +51,12 @@ export function AddTaskInline({ columnId, onCreated }: { columnId: string; onCre
       <textarea
         ref={ref}
         value={value}
+        disabled={isSubmitting}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
-            submit();
+            void submit();
           }
           if (e.key === "Escape") {
             setOpen(false);
@@ -57,21 +65,24 @@ export function AddTaskInline({ columnId, onCreated }: { columnId: string; onCre
         }}
         placeholder="Task title"
         rows={2}
-        className="resize-none bg-transparent text-[13px] outline-none placeholder:text-ink-faint"
+        className="resize-none bg-transparent text-[13px] outline-none placeholder:text-ink-faint disabled:opacity-60"
       />
       <div className="flex items-center gap-2">
         <button
-          onClick={submit}
-          className="rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-accent-ink hover:opacity-90"
+          onClick={() => void submit()}
+          disabled={isSubmitting}
+          className="flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1 text-[12px] font-medium text-accent-ink transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          Add task
+          {isSubmitting && <Loader2 size={12} className="animate-spin" aria-hidden="true" />}
+          {isSubmitting ? "Adding..." : "Add task"}
         </button>
         <button
           onClick={() => {
             setOpen(false);
             setValue("");
           }}
-          className="flex h-6 w-6 items-center justify-center rounded text-ink-faint hover:bg-surface-2 hover:text-ink"
+          disabled={isSubmitting}
+          className="flex h-6 w-6 items-center justify-center rounded text-ink-faint hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Cancel"
         >
           <X size={14} />

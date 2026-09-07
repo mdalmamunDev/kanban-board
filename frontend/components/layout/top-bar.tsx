@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, LogOut, Search, UserPlus } from "lucide-react";
+import { Loader2, Lock, LogOut, Search, UserPlus } from "lucide-react";
 import { Board } from "@/lib/types";
 import { useBoardStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
@@ -16,6 +16,7 @@ export function TopBar({ board, search, onSearchChange }: { board?: Board; searc
   const { user, logout } = useAuth();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,9 +37,16 @@ export function TopBar({ board, search, onSearchChange }: { board?: Board; searc
     };
   }, [profileOpen]);
 
-  const handleLogout = () => {
-    setProfileOpen(false);
-    logout();
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      // Await POST /auth/logout (token blacklisting) so the spinner is visible
+      // for the duration of the request; navigation happens afterwards.
+      await logout();
+    } finally {
+      setIsLoggingOut(false);
+    }
     router.push("/login");
   };
 
@@ -114,10 +122,15 @@ export function TopBar({ board, search, onSearchChange }: { board?: Board; searc
                 <div className="my-1 border-t border-border" />
                 <button
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] font-medium text-ink-muted hover:bg-surface-2 hover:text-ink"
+                  disabled={isLoggingOut}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] font-medium text-ink-muted hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  <LogOut size={13} />
-                  Log out
+                  {isLoggingOut ? (
+                    <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <LogOut size={13} />
+                  )}
+                  {isLoggingOut ? "Logging out..." : "Log out"}
                 </button>
               </div>
             )}

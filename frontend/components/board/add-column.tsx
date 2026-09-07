@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Loader2, Plus, X } from "lucide-react";
 import { useBoardStore } from "@/lib/store";
 
 export function AddColumn({ boardId }: { boardId: string }) {
@@ -9,6 +9,7 @@ export function AddColumn({ boardId }: { boardId: string }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -17,15 +18,20 @@ export function AddColumn({ boardId }: { boardId: string }) {
 
   const submit = async () => {
     const title = value.trim();
-    if (!title) return;
-    const result = await addColumn(boardId, title);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    if (!title || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const result = await addColumn(boardId, title);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setError(null);
+      setValue("");
+      setOpen(false);
+    } finally {
+      setIsSubmitting(false);
     }
-    setError(null);
-    setValue("");
-    setOpen(false);
   };
 
   if (!open) {
@@ -46,6 +52,7 @@ export function AddColumn({ boardId }: { boardId: string }) {
         <input
           ref={ref}
           value={value}
+          disabled={isSubmitting}
           onChange={(e) => {
             setValue(e.target.value);
             setError(null);
@@ -59,13 +66,15 @@ export function AddColumn({ boardId }: { boardId: string }) {
             }
           }}
           placeholder="Column name"
-          className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-ink-faint"
+          className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-ink-faint disabled:opacity-60"
         />
         <button
           onClick={() => void submit()}
-          className="rounded-md bg-accent px-2 py-1 text-[12px] font-medium text-accent-ink hover:opacity-90"
+          disabled={isSubmitting}
+          className="flex items-center gap-1.5 rounded-md bg-accent px-2 py-1 text-[12px] font-medium text-accent-ink transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          Add
+          {isSubmitting && <Loader2 size={12} className="animate-spin" aria-hidden="true" />}
+          {isSubmitting ? "Adding..." : "Add"}
         </button>
         <button
           onClick={() => {
@@ -73,7 +82,8 @@ export function AddColumn({ boardId }: { boardId: string }) {
             setError(null);
             setOpen(false);
           }}
-          className="flex h-6 w-6 items-center justify-center rounded text-ink-faint hover:bg-surface-2 hover:text-ink"
+          disabled={isSubmitting}
+          className="flex h-6 w-6 items-center justify-center rounded text-ink-faint hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Cancel"
         >
           <X size={14} />
