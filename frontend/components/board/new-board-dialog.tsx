@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import clsx from "clsx";
 import { useBoardStore } from "@/lib/store";
 
@@ -20,26 +20,36 @@ export function NewBoardDialog({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState(COLORS[0]);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!open) return null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    const board = await createBoard(name.trim(), description.trim(), color);
-    if (!board) return;
-    setName("");
-    setDescription("");
-    setColor(COLORS[0]);
-    onClose();
-    onCreated(board.id);
+    if (!name.trim() || isSubmitting) return;
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const board = await createBoard(name.trim(), description.trim(), color);
+      if (!board) return;
+      setName("");
+      setDescription("");
+      setColor(COLORS[0]);
+      onClose();
+      onCreated(board.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create board.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-4 animate-fade-in">
       <div
         className="absolute inset-0"
-        onClick={onClose}
+        onClick={isSubmitting ? undefined : onClose}
         aria-hidden
       />
       <div className="relative w-full max-w-sm rounded-lg border border-border bg-surface p-5 shadow-popover animate-pop-in">
@@ -47,7 +57,8 @@ export function NewBoardDialog({
           <h2 className="text-[15px] font-semibold">New board</h2>
           <button
             onClick={onClose}
-            className="flex h-6 w-6 items-center justify-center rounded text-ink-faint hover:bg-surface-2 hover:text-ink"
+            disabled={isSubmitting}
+            className="flex h-6 w-6 items-center justify-center rounded text-ink-faint hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Close"
           >
             <X size={15} />
@@ -106,19 +117,23 @@ export function NewBoardDialog({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-3 py-1.5 text-[13px] font-medium text-ink-muted hover:bg-surface-2"
+              disabled={isSubmitting}
+              className="rounded-md px-3 py-1.5 text-[13px] font-medium text-ink-muted hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={!name.trim()}
-              className="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-40"
+              disabled={!name.trim() || isSubmitting}
+              className="flex items-center justify-center gap-2 rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-accent-ink transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              Create board
+              {isSubmitting && <Loader2 size={13} className="animate-spin" aria-hidden="true" />}
+              {isSubmitting ? "Creating..." : "Create board"}
             </button>
           </div>
         </form>
+
+        {error && <p className="mt-2 text-[12px] text-danger">{error}</p>}
       </div>
     </div>
   );

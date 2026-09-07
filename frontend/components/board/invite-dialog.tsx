@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, ChevronDown } from "lucide-react";
+import { X, ChevronDown, Loader2 } from "lucide-react";
 import { Board, Role } from "@/lib/types";
 import { useBoardStore } from "@/lib/store";
 import { Avatar } from "@/components/ui/avatar";
@@ -26,21 +26,27 @@ export function InviteDialog({
   const [role, setRole] = useState<"editor" | "viewer">("editor");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!open) return null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!email.trim() || isSubmitting) return;
     setFeedback(null);
     setError(null);
-    const result = await inviteMember(board.id, email.trim(), role);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    setIsSubmitting(true);
+    try {
+      const result = await inviteMember(board.id, email.trim(), role);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setFeedback(`${email.trim()} now has access to this board.`);
+      setEmail("");
+    } finally {
+      setIsSubmitting(false);
     }
-    setFeedback(`${email.trim()} now has access to this board.`);
-    setEmail("");
   };
 
   return (
@@ -51,7 +57,8 @@ export function InviteDialog({
           <h2 className="text-[15px] font-semibold">Share &ldquo;{board.name}&rdquo;</h2>
           <button
             onClick={onClose}
-            className="flex h-6 w-6 items-center justify-center rounded text-ink-faint hover:bg-surface-2 hover:text-ink"
+            disabled={isSubmitting}
+            className="flex h-6 w-6 items-center justify-center rounded text-ink-faint hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Close"
           >
             <X size={15} />
@@ -79,10 +86,11 @@ export function InviteDialog({
           </div>
           <button
             type="submit"
-            disabled={!email.trim()}
-            className="rounded-md bg-accent px-3.5 py-2 text-[13px] font-medium text-accent-ink transition-opacity hover:opacity-90 disabled:opacity-40"
+            disabled={!email.trim() || isSubmitting}
+            className="flex items-center justify-center gap-2 rounded-md bg-accent px-3.5 py-2 text-[13px] font-medium text-accent-ink transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            Invite
+            {isSubmitting && <Loader2 size={13} className="animate-spin" aria-hidden="true" />}
+            {isSubmitting ? "Inviting..." : "Invite"}
           </button>
         </form>
         {feedback && <p className="mt-2 text-[12px] text-ink-faint">{feedback}</p>}
