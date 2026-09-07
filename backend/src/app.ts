@@ -7,6 +7,7 @@ import { apiLimiter } from "./lib/rateLimit";
 import prisma from "./lib/prisma";
 import { redis } from "./lib/redis";
 import { asyncHandler } from "./utils/asyncHandler";
+import { logTimestamp } from "./utils/time";
 import { errorHandler } from "./middleware/errorHandler";
 import authRoutes from "./routes/auth.routes";
 import boardRoutes from "./routes/board.routes";
@@ -25,7 +26,11 @@ export function createApp(): express.Express {
     })
   );
   app.use(express.json({ limit: "1mb" }));
-  if (!isProd) app.use(morgan("dev"));
+  if (!isProd) {
+    // Same info as morgan("dev"), but with a GMT+6 timestamp prefix.
+    morgan.token("tztime", () => logTimestamp());
+    app.use(morgan("[:tztime GMT+6] :method :url :status :response-time ms - :res[content-length]"));
+  }
 
   // Redis-backed global rate limit (100 req/min/IP).
   app.use("/api", apiLimiter);

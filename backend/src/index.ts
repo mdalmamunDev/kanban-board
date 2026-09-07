@@ -2,11 +2,12 @@ import { createApp } from "./app";
 import { config } from "./config";
 import prisma from "./lib/prisma";
 import { redis } from "./lib/redis";
+import { logTimestamp } from "./utils/time";
 
 const app = createApp();
 
 const server = app.listen(config.PORT, () => {
-  console.log(`[api] listening on http://localhost:${config.PORT} (${config.NODE_ENV})`);
+  console.log(`[${logTimestamp()} GMT+6] [api] listening on http://localhost:${config.PORT} (${config.NODE_ENV})`);
 });
 
 // Graceful shutdown - stop accepting connections, then close DB/Redis pools.
